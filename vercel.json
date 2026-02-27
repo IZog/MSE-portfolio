@@ -7,10 +7,8 @@
     { "source": "/((?!api/).*)", "destination": "/index.html" }
   ],
   "functions": {
-    "api/**/*.py": {
-      "maxDuration": 60,
-      "runtime": "python3.12",
-      "excludeFiles": "{tests/**,__tests__/**,src/**,public/**,node_modules/**}"
+    "api/index.py": {
+      "maxDuration": 60
     }
   }
 }
