@@ -72,8 +72,10 @@ def _text(tag: Tag | None) -> str | None:
 def _find_label_value(soup: BeautifulSoup, label: str) -> str | None:
     """Find a value in a label-value pair layout common on MSE pages.
 
-    Searches for a tag whose text matches *label* (case-insensitive) and
-    returns the text of the next sibling ``<td>`` or ``<dd>`` element.
+    MSE uses several layouts:
+    1. <th>Label</th><td>Value</td>   (financial tables)
+    2. <div class="col-md-5">Label</div><div class="col-md-7">Value</div>
+    3. <div class="row">Label:Value</div>
     """
     pattern = re.compile(re.escape(label), re.IGNORECASE)
     th = soup.find(string=pattern)
@@ -83,13 +85,18 @@ def _find_label_value(soup: BeautifulSoup, label: str) -> str | None:
     if parent is None:
         return None
 
-    # Try the next sibling <td> or <dd>.
+    # Try the next sibling <td> or <dd> (table layout).
     nxt = parent.find_next_sibling(["td", "dd"])
     if nxt:
         return _text(nxt)
 
+    # Try the next sibling <div> (Bootstrap col layout).
+    nxt_div = parent.find_next_sibling("div")
+    if nxt_div:
+        return _text(nxt_div)
+
     # Fallback: the next element at the same level.
-    nxt = parent.find_next(["td", "dd", "span"])
+    nxt = parent.find_next(["td", "dd", "span", "div"])
     return _text(nxt) if nxt else None
 
 
@@ -151,78 +158,96 @@ def _extract_company_profile(soup: BeautifulSoup, ticker: str) -> dict[str, Any]
     """Extract company name, description, address, and sector."""
     profile: dict[str, Any] = {"ticker": ticker.upper()}
 
-    # Company name is usually in the page title or a prominent heading.
+    # Company name from page title: "TICKER - Company Name | MSE"
     title_tag = soup.find("title")
     if title_tag:
         title_text = title_tag.get_text(strip=True)
-        # Title is often "TICKER - Company Name | MSE"
         parts = title_text.split("-", 1)
         if len(parts) > 1:
             profile["name"] = parts[1].split("|")[0].strip()
         elif parts:
             profile["name"] = parts[0].strip()
 
-    # Fallback: h1 or prominent heading with company name.
+    # Fallback: h1.
     if not profile.get("name"):
         h1 = soup.find("h1")
         if h1:
             profile["name"] = _text(h1)
 
-    # Description - look for "About" section or similar.
-    about_section = soup.find(string=re.compile(r"About|Description|Profile", re.I))
-    if about_section:
-        parent = about_section.find_parent(["div", "section", "td"])
-        if parent:
-            p_tag = parent.find("p")
-            if p_tag:
-                profile["description"] = _text(p_tag)
+    # Description from the #companyProfile tab pane.
+    cp_div = soup.find(id="companyProfile")
+    if cp_div:
+        p_tag = cp_div.find("p")
+        if p_tag:
+            profile["description"] = _text(p_tag)
 
-    # Address
-    profile["address"] = _find_label_value(soup, "Address")
+    # Sector / market segment (e.g. "Exchange Listing - Ordinary shares").
+    profile["sector"] = _find_label_value(soup, "Market segment")
 
-    # Sector
-    profile["sector"] = _find_label_value(soup, "Sector")
+    # Address — not reliably available on the symbol page; skip to avoid
+    # pulling wrong data (e.g. "Contact person" label).
+    profile["address"] = None
 
     return profile
+
+
+def _extract_section_rows(soup: BeautifulSoup, header_text: str) -> dict[str, str]:
+    """Extract key:value pairs from div.row elements following a section header.
+
+    MSE uses a pattern like:
+        <div class="row"><div class="col well-minimal">Last trade: ...</div></div>
+        <div class="row">Max Price:25,300.00</div>
+        <div class="row">Min Price:25,200.00</div>
+        ...
+    """
+    result: dict[str, str] = {}
+    header_el = soup.find(string=lambda s: s and header_text in str(s))
+    if not header_el:
+        return result
+    row_div = header_el.find_parent("div", class_="row")
+    if not row_div:
+        return result
+    for sib in row_div.find_next_siblings("div", class_="row"):
+        text = sib.get_text(strip=True)
+        # Stop if we hit the next section header (text without a colon-number pattern).
+        if ":" not in text:
+            break
+        # Also stop if we hit another well-known section header.
+        if any(h in text for h in ("Last 52 weeks", "Last trade", "*")):
+            break
+        parts = text.split(":", 1)
+        if len(parts) == 2:
+            result[parts[0].strip()] = parts[1].strip()
+    return result
 
 
 def _extract_price_data(soup: BeautifulSoup) -> dict[str, Any]:
     """Extract current price, 52-week range, shares outstanding, market cap."""
     price: dict[str, Any] = {}
 
-    # Current price — MSE uses <span class="price"> inside the symbol header.
-    price_el = soup.find("span", class_="price")
-    if price_el:
-        price["current_price"] = _parse_mkd_number(_text(price_el))
+    # --- "Last trade" section gives current-day price data ---
+    last_trade = _extract_section_rows(soup, "Last trade")
+    if last_trade.get("Avg Price"):
+        price["current_price"] = _parse_mkd_number(last_trade["Avg Price"])
 
-    # Fallback: look for label-based price.
-    if not price.get("current_price"):
-        for label in ("Last trade price", "Price", "Last Price", "Closing Price"):
-            val = _find_label_value(soup, label)
-            if val:
-                price["current_price"] = _parse_mkd_number(val)
-                break
+    # --- "Last 52 weeks" section gives yearly high/low ---
+    last_52w = _extract_section_rows(soup, "Last 52 weeks")
+    price["high_52w"] = _parse_mkd_number(last_52w.get("Max Price"))
+    price["low_52w"] = _parse_mkd_number(last_52w.get("Min Price"))
 
-    # Price change % — MSE uses <span class="change-percent">.
-    chg_el = soup.find("span", class_="change-percent")
-    if chg_el:
-        price["price_change_pct"] = _parse_mkd_number(_text(chg_el))
-    else:
-        chg = _find_label_value(soup, "%chg") or _find_label_value(soup, "Change")
-        price["price_change_pct"] = _parse_mkd_number(chg)
-
-    # 52-week high / low — MSE labels these as "Max Price" and "Min Price"
-    # inside the "Last 52 weeks" section.
-    for label in ("Max Price", "52 week high", "52-week high"):
-        val = _find_label_value(soup, label)
-        if val:
-            price["high_52w"] = _parse_mkd_number(val)
-            break
-    for label in ("Min Price", "52 week low", "52-week low"):
-        val = _find_label_value(soup, label)
-        if val:
-            price["low_52w"] = _parse_mkd_number(val)
-            break
+    # Price change % — derive from last_trade vs previous if available,
+    # otherwise look for a percentage in the page header ticker strip.
+    # The MSE ticker strip shows e.g. "ALK 25,273.06 0.92 %" as link text.
+    if not price.get("price_change_pct"):
+        for a_tag in soup.find_all("a", href=re.compile(r"/en/symbol/", re.I)):
+            link_text = a_tag.get_text(strip=True)
+            pct_match = re.search(r"(-?\d+[\.,]?\d*)\s*%", link_text)
+            ticker_match = re.search(r"^[A-Z]{2,5}", link_text)
+            if pct_match and ticker_match:
+                # Only use if it matches our ticker.
+                if link_text.startswith(soup.find("title").get_text(strip=True).split("-")[0].strip()[:3]):
+                    price["price_change_pct"] = _parse_mkd_number(pct_match.group(1))
+                    break
 
     # Total shares outstanding
     for label in ("Total shares", "Shares outstanding", "Number of shares"):
@@ -291,9 +316,22 @@ def _extract_financials(soup: BeautifulSoup) -> list[dict[str, Any]]:
         for year in sorted(year_data):
             data = year_data[year]
             if any(v is not None for v in data.values()):
+                # Skip rows that look like percentages (values < 100 when
+                # we expect figures in thousands of MKD).
+                revenue = data.get("revenue")
+                if revenue is not None and abs(revenue) < 100:
+                    continue
                 financials.append({"year": year, **data})
 
-    return financials
+    # Deduplicate by year — keep the entry with the most fields.
+    seen: dict[int, dict] = {}
+    for entry in financials:
+        yr = entry["year"]
+        if yr not in seen or sum(1 for v in entry.values() if v is not None) > sum(
+            1 for v in seen[yr].values() if v is not None
+        ):
+            seen[yr] = entry
+    return sorted(seen.values(), key=lambda d: d["year"])
 
 
 def _extract_ratios(soup: BeautifulSoup) -> dict[str, Any]:
