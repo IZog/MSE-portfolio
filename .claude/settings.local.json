@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:mse.mk)",
+      "WebFetch(domain:alkaloid.com.mk)",
+      "WebFetch(domain:www.marketscreener.com)",
+      "WebFetch(domain:en.wikipedia.org)",
+      "WebFetch(domain:www.gurufocus.com)",
+      "WebFetch(domain:www.mse.mk)",
+      "WebFetch(domain:cms.alkaloid.com.mk)",
+      "WebFetch(domain:www.stockopedia.com)",
+      "WebFetch(domain:seinet.com.mk)",
+      "Bash(git init:*)",
+      "Bash(git add:*)"
+    ]
+  }
+}
