@@ -335,25 +335,79 @@ def _extract_financials(soup: BeautifulSoup) -> list[dict[str, Any]]:
 
 
 def _extract_ratios(soup: BeautifulSoup) -> dict[str, Any]:
-    """Extract key financial ratios from the symbol page."""
+    """Extract key financial ratios from the year-columned table on the symbol page.
+
+    The MSE ratios table has this structure:
+        Year          | 2025   | 2024   | 2023
+        EPS           | 1254   | 1176   | 1101
+        Dividend yield| 0.00%  | 2.23%  | 2.97%
+
+    For each ratio we pick the most recent year that has a non-zero/non-empty
+    value, so we don't report "no dividend" when it's just not yet confirmed
+    for the latest year.
+    """
     ratios: dict[str, Any] = {}
 
-    mapping = {
-        "pe_ratio": ["P/E", "Price/Earnings", "PE Ratio"],
-        "eps": ["EPS", "Earnings per share"],
-        "roa": ["ROA", "Return on assets"],
-        "roe": ["ROE", "Return on equity"],
-        "book_value_per_share": ["Book value per share", "BV per share"],
-        "dividend_per_share": ["Dividend per share", "DPS"],
-        "dividend_yield": ["Dividend yield"],
-        "market_cap": ["Market capitali"],
+    # Map our output keys to regex patterns matching MSE row labels.
+    label_map: dict[str, re.Pattern] = {
+        "pe_ratio": re.compile(r"price.?to.?earnings|p/?e\b", re.I),
+        "eps": re.compile(r"earnings.?per.?share|eps", re.I),
+        "roa": re.compile(r"return.?on.?assets|roa", re.I),
+        "roe": re.compile(r"return.?on.?equity|roe", re.I),
+        "pb_ratio": re.compile(r"price.?to.?book|p/?b\b", re.I),
+        "book_value_per_share": re.compile(r"book.?value.?per.?share", re.I),
+        "dividend_per_share": re.compile(r"dividend.?per.?share|dps", re.I),
+        "dividend_yield": re.compile(r"dividend.?yield", re.I),
     }
 
-    for key, labels in mapping.items():
-        for label in labels:
-            val = _find_label_value(soup, label)
-            if val is not None:
-                ratios[key] = _parse_mkd_number(val)
-                break
+    # Find the ratios table (contains EPS, P/E, Dividend, etc.).
+    for table in soup.find_all("table"):
+        rows = _extract_table_rows(table)
+        if len(rows) < 2:
+            continue
+
+        # Identify year columns.
+        header = rows[0]
+        year_cols: list[tuple[int, int]] = []  # (col_index, year) sorted desc
+        for idx, cell in enumerate(header):
+            m = re.search(r"(20\d{2})", cell)
+            if m:
+                year_cols.append((idx, int(m.group(1))))
+        if not year_cols:
+            continue
+        year_cols.sort(key=lambda x: x[1], reverse=True)  # newest first
+
+        # Check if this table has ratio-like rows.
+        flat_text = " ".join(r[0] for r in rows[1:] if r).lower()
+        if not any(kw in flat_text for kw in ["eps", "p/e", "dividend", "earnings per"]):
+            continue
+
+        # Extract each ratio, preferring the most recent non-empty value.
+        for row in rows[1:]:
+            if not row:
+                continue
+            row_label = row[0]
+            for key, pattern in label_map.items():
+                if pattern.search(row_label):
+                    # Walk columns from newest to oldest, take first non-zero.
+                    for col_idx, _year in year_cols:
+                        if col_idx < len(row):
+                            val = _parse_mkd_number(row[col_idx])
+                            if val is not None and val != 0:
+                                ratios[key] = val
+                                break
+                    # If all columns were zero/empty, store 0 or None.
+                    if key not in ratios:
+                        # Try the newest column anyway.
+                        if year_cols and year_cols[0][0] < len(row):
+                            ratios[key] = _parse_mkd_number(row[year_cols[0][0]])
+                    break
+        break  # Only process the first matching table.
+
+    # Market cap is not in the ratios table — it's a label/value pair.
+    if "market_cap" not in ratios:
+        mc = _find_label_value(soup, "Market capitali")
+        if mc:
+            ratios["market_cap"] = _parse_mkd_number(mc)
 
     return ratios
