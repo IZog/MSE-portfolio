@@ -14,7 +14,15 @@
       "Bash(git add:*)",
       "Bash(git commit:*)",
       "Bash(gh repo create:*)",
-      "Bash(git push:*)"
+      "Bash(git push:*)",
+      "Bash(git remote set-url:*)",
+      "Bash(gh auth status:*)",
+      "Bash(gh auth:*)",
+      "Bash(npm create:*)",
+      "Bash(npm install:*)",
+      "Bash(npx tsc:*)",
+      "Bash(npm run build:*)",
+      "Bash(echo:*)"
     ]
   }
 }
