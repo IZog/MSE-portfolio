@@ -106,12 +106,44 @@ def assess_risk(
     # Score: 0-100 where higher = safer.
     score = _risk_score(liquidity_risk, volatility_risk, financial_risk, market_risk)
 
+    # ---- V2: Additional flags ------------------------------------------
+    # Days since last trade flag.
+    days_since_last_trade_flag = None
+    from datetime import date as _date, datetime as _datetime
+
+    for p in reversed(price_history):
+        vol = p.get("volume")
+        if vol is not None and vol > 0:
+            date_str = p.get("date", "")
+            for fmt in ("%m/%d/%Y", "%Y-%m-%d", "%d.%m.%Y"):
+                try:
+                    trade_date = _datetime.strptime(date_str, fmt).date()
+                    days_gap = (_date.today() - trade_date).days
+                    if days_gap > 30:
+                        days_since_last_trade_flag = f"Stale — no trade in {days_gap} days"
+                        factors.append(f"No trading activity for {days_gap} days")
+                    elif days_gap > 7:
+                        days_since_last_trade_flag = f"Caution — last trade {days_gap} days ago"
+                    else:
+                        days_since_last_trade_flag = "Active"
+                    break
+                except ValueError:
+                    continue
+            break
+
+    # Free float and ownership — not available from MSE scraping.
+    free_float_flag = "Unknown — not disclosed on MSE"
+    ownership_concentration_flag = "Unknown — not disclosed on MSE"
+
     return {
         "liquidity_risk": liquidity_risk,
         "volatility_risk": volatility_risk,
         "financial_risk": financial_risk,
         "market_risk": market_risk,
         "overall_risk": overall_risk,
+        "days_since_last_trade_flag": days_since_last_trade_flag,
+        "free_float_flag": free_float_flag,
+        "ownership_concentration_flag": ownership_concentration_flag,
         "factors": factors,
         "score": score,
     }

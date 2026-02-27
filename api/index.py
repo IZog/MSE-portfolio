@@ -13,9 +13,11 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from api.models.schemas import (
     CompanyProfile,
+    DisclosureInfo,
     FinancialData,
     FinancialRatios,
     MacroContext,
+    NewsItem,
     PriceData,
     PricePoint,
     ResearchReport,
@@ -27,6 +29,7 @@ from api.models.schemas import (
 )
 from api.scrapers.history import scrape_history
 from api.scrapers.index_data import scrape_mbi10
+from api.scrapers.index_history import scrape_index_history
 from api.scrapers.symbol import scrape_symbol
 from api.scrapers.tickers import scrape_tickers
 from api.analysis.valuation import compute_valuation
@@ -127,9 +130,10 @@ async def get_research(
         symbol_task = asyncio.create_task(scrape_symbol(ticker))
         history_task = asyncio.create_task(scrape_history(ticker, days=days))
         mbi10_task = asyncio.create_task(scrape_mbi10())
+        mbi10_hist_task = asyncio.create_task(scrape_index_history(days=days))
 
-        symbol_data, history_data, mbi10_data = await asyncio.gather(
-            symbol_task, history_task, mbi10_task,
+        symbol_data, history_data, mbi10_data, mbi10_history = await asyncio.gather(
+            symbol_task, history_task, mbi10_task, mbi10_hist_task,
             return_exceptions=True,
         )
     except Exception as exc:
@@ -152,11 +156,16 @@ async def get_research(
         logger.warning("MBI10 scraper failed: %s", mbi10_data)
         mbi10_data = {}
 
+    if isinstance(mbi10_history, BaseException):
+        logger.warning("MBI10 history scraper failed: %s", mbi10_history)
+        mbi10_history = []
+
     # ---- Step 2: Unpack scraped data ---------------------------------
     company_raw = symbol_data.get("company", {})
     price_raw = symbol_data.get("price", {})
     financials_raw = symbol_data.get("financials", [])
     ratios_raw = symbol_data.get("ratios", {})
+    disclosures_raw = symbol_data.get("disclosures", {})
 
     # ---- Step 3: Analysis pipeline -----------------------------------
     current_price = price_raw.get("current_price")
@@ -169,7 +178,7 @@ async def get_research(
         total_shares=total_shares,
     )
 
-    technical_data = compute_technical(history_data)
+    technical_data = compute_technical(history_data, mbi10_history=mbi10_history)
 
     risk_data = assess_risk(
         price_data=price_raw,
@@ -178,7 +187,7 @@ async def get_research(
         price_history=history_data,
     )
 
-    macro_data = get_macro_context(mbi10_data)
+    macro_data = get_macro_context(mbi10_data, mbi10_history=mbi10_history)
 
     verdict_data = generate_verdict(
         valuation=valuation_data,
@@ -188,7 +197,23 @@ async def get_research(
         ratios=ratios_raw,
     )
 
-    # ---- Step 4: Assemble response -----------------------------------
+    # ---- Step 4: Build disclosures model ----------------------------
+    disclosure_model = None
+    if disclosures_raw:
+        news_items = [
+            NewsItem(**n) for n in disclosures_raw.get("recent_news", [])
+        ]
+        disclosure_model = DisclosureInfo(
+            last_seinet_date=disclosures_raw.get("last_seinet_date"),
+            last_seinet_title=disclosures_raw.get("last_seinet_title"),
+            last_report_date=disclosures_raw.get("last_report_date"),
+            next_report_expected=disclosures_raw.get("next_report_expected"),
+            recent_news=news_items,
+            last_dividend_date=disclosures_raw.get("last_dividend_date"),
+            last_dividend_amount=disclosures_raw.get("last_dividend_amount"),
+        )
+
+    # ---- Step 5: Assemble response -----------------------------------
     report = ResearchReport(
         ticker=ticker,
         company=CompanyProfile(**company_raw),
@@ -201,6 +226,7 @@ async def get_research(
         macro=MacroContext(**macro_data),
         risk=RiskAssessment(**risk_data),
         verdict=Verdict(**verdict_data),
+        disclosures=disclosure_model,
         generated_at=_now_iso(),
     )
 

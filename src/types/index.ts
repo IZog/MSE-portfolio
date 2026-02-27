@@ -48,6 +48,22 @@ export interface FinancialRatios {
   market_cap: number | null;
 }
 
+export interface NewsItem {
+  date: string | null;
+  title: string | null;
+  url: string | null;
+}
+
+export interface DisclosureInfo {
+  last_seinet_date: string | null;
+  last_seinet_title: string | null;
+  last_report_date: string | null;
+  next_report_expected: string | null;
+  recent_news: NewsItem[];
+  last_dividend_date: string | null;
+  last_dividend_amount: number | null;
+}
+
 export interface ValuationMetrics {
   pe_ratio: number | null;
   pe_assessment: string | null;
@@ -57,6 +73,10 @@ export interface ValuationMetrics {
   dividend_assessment: string | null;
   earnings_yield: number | null;
   overall_assessment: string | null;
+  ev_ebitda: number | null;
+  ev_ebitda_note: string | null;
+  deposit_rate_spread: number | null;
+  net_profit_margin: number | null;
   score: number;
 }
 
@@ -72,6 +92,9 @@ export interface TechnicalAnalysis {
   avg_volume_10d: number | null;
   avg_volume_30d: number | null;
   week52_position: number | null;
+  ytd_return_pct: number | null;
+  days_since_last_trade: number | null;
+  beta_vs_mbi10: number | null;
   score: number;
 }
 
@@ -81,6 +104,8 @@ export interface MacroContext {
   gdp_growth: number | null;
   inflation: number | null;
   policy_rate: number | null;
+  deposit_rate: number | null;
+  mbi10_ytd_pct: number | null;
   last_updated: string | null;
 }
 
@@ -90,6 +115,9 @@ export interface RiskAssessment {
   financial_risk: string | null;
   market_risk: string;
   overall_risk: string | null;
+  days_since_last_trade_flag: string | null;
+  free_float_flag: string | null;
+  ownership_concentration_flag: string | null;
   factors: string[];
   score: number;
 }
@@ -118,6 +146,7 @@ export interface ResearchReport {
   macro: MacroContext;
   risk: RiskAssessment;
   verdict: Verdict;
+  disclosures: DisclosureInfo | null;
   generated_at: string;
 }
 

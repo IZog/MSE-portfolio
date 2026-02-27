@@ -8,15 +8,19 @@ import RefreshButton from '../components/common/RefreshButton';
 import VerdictBanner from '../components/verdict/VerdictBanner';
 import SummaryReport from '../components/verdict/SummaryReport';
 import CompanyProfile from '../components/profile/CompanyProfile';
+import CoreMetricsCard from '../components/core/CoreMetricsCard';
 import PriceCard from '../components/price/PriceCard';
 import PriceChart from '../components/price/PriceChart';
 import VolumeChart from '../components/price/VolumeChart';
 import FinancialsTable from '../components/financials/FinancialsTable';
 import RatiosTable from '../components/financials/RatiosTable';
 import ValuationCard from '../components/analysis/ValuationCard';
+import FundamentalsCard from '../components/analysis/FundamentalsCard';
 import TechnicalCard from '../components/analysis/TechnicalCard';
 import RiskCard from '../components/analysis/RiskCard';
+import LiquidityFlagsCard from '../components/analysis/LiquidityFlagsCard';
 import MacroCard from '../components/analysis/MacroCard';
+import DisclosuresCard from '../components/disclosures/DisclosuresCard';
 
 export default function DashboardPage() {
   const { ticker } = useParams<{ ticker: string }>();
@@ -46,13 +50,22 @@ export default function DashboardPage() {
       {/* Verdict banner - full width */}
       <VerdictBanner verdict={report.verdict} />
 
+      {/* Core metrics strip - full width */}
+      <CoreMetricsCard
+        price={report.price}
+        technical={report.technical}
+        valuation={report.valuation}
+        ratios={report.ratios}
+      />
+
       {/* Main grid */}
       <DashboardLayout>
         {/* Left column */}
         <div className="space-y-5">
           <CompanyProfile company={report.company} />
           <RatiosTable ratios={report.ratios} />
-          <MacroCard macro={report.macro} />
+          <MacroCard macro={report.macro} technical={report.technical} />
+          <DisclosuresCard disclosures={report.disclosures} />
         </div>
 
         {/* Middle column - spans 2 cols on large screens */}
@@ -63,6 +76,14 @@ export default function DashboardPage() {
           </div>
           <PriceChart history={report.price_history} technical={report.technical} />
           <VolumeChart history={report.price_history} />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            <FundamentalsCard
+              financials={report.financials}
+              ratios={report.ratios}
+              valuation={report.valuation}
+            />
+            <LiquidityFlagsCard risk={report.risk} technical={report.technical} />
+          </div>
           <FinancialsTable financials={report.financials} />
           <SummaryReport verdict={report.verdict} />
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">

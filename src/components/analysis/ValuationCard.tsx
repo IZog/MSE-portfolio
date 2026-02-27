@@ -71,6 +71,27 @@ export default function ValuationCard({ valuation }: Props) {
             {valuation.earnings_yield != null ? formatPercent(valuation.earnings_yield) : 'N/A'}
           </dd>
         </div>
+        <div className="flex justify-between items-center">
+          <dt className="text-gray-500">EV/EBITDA</dt>
+          <dd className="text-gray-900 font-medium">
+            {valuation.ev_ebitda != null ? formatRatio(valuation.ev_ebitda) : 'N/A'}
+            {valuation.ev_ebitda_note && (
+              <span className="text-gray-400 text-xs ml-1" title={valuation.ev_ebitda_note}>*</span>
+            )}
+          </dd>
+        </div>
+        <div className="flex justify-between">
+          <dt className="text-gray-500">Deposit Rate Spread</dt>
+          <dd className="text-gray-900 font-medium">
+            {valuation.deposit_rate_spread != null ? `${valuation.deposit_rate_spread > 0 ? '+' : ''}${formatPercent(valuation.deposit_rate_spread)}` : 'N/A'}
+          </dd>
+        </div>
+        <div className="flex justify-between">
+          <dt className="text-gray-500">Net Margin</dt>
+          <dd className="text-gray-900 font-medium">
+            {valuation.net_profit_margin != null ? formatPercent(valuation.net_profit_margin) : 'N/A'}
+          </dd>
+        </div>
         <div className="flex justify-between">
           <dt className="text-gray-500">Score</dt>
           <dd className="text-gray-900 font-bold">{valuation.score}<span className="text-gray-400 font-normal">/100</span></dd>

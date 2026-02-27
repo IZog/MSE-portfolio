@@ -44,6 +44,36 @@ def compute_valuation(
     # Score (0-100).
     score = _compute_score(pe, pb, div_yield)
 
+    # ---------- V2: EV/EBITDA, deposit spread, net margin --------
+
+    ev_ebitda: float | None = None
+    ev_ebitda_note: str | None = None
+    deposit_rate_spread: float | None = None
+    net_profit_margin: float | None = None
+
+    # EV/EBITDA — estimate EBITDA as operating_profit × 1.15 (rough DA proxy).
+    if financials and current_price and total_shares:
+        latest = max(financials, key=lambda f: f.get("year", 0))
+        op_profit = latest.get("operating_profit")
+        total_liab = latest.get("total_liabilities", 0) or 0
+        if op_profit and op_profit > 0:
+            ebitda_est = op_profit * 1.15
+            equity_value = current_price * total_shares
+            ev = equity_value + total_liab  # simplified: EV = market cap + debt
+            ev_ebitda = round(ev / ebitda_est, 2)
+            ev_ebitda_note = "EBITDA estimated as Operating Profit × 1.15"
+
+        # Net profit margin.
+        revenue = latest.get("revenue")
+        net_p = latest.get("net_profit")
+        if revenue and revenue > 0 and net_p is not None:
+            net_profit_margin = round(net_p / revenue * 100, 2)
+
+    # Deposit rate spread: earnings yield minus deposit rate.
+    deposit_rate = 3.5  # NBRM avg deposit rate
+    if earnings_yield is not None:
+        deposit_rate_spread = round(earnings_yield - deposit_rate, 2)
+
     return {
         "pe_ratio": pe,
         "pe_assessment": pe_assessment,
@@ -53,6 +83,10 @@ def compute_valuation(
         "dividend_assessment": div_assessment,
         "earnings_yield": earnings_yield,
         "overall_assessment": overall,
+        "ev_ebitda": ev_ebitda,
+        "ev_ebitda_note": ev_ebitda_note,
+        "deposit_rate_spread": deposit_rate_spread,
+        "net_profit_margin": net_profit_margin,
         "score": score,
     }
 

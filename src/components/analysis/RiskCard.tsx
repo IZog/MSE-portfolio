@@ -54,6 +54,30 @@ export default function RiskCard({ risk }: Props) {
         })}
       </div>
 
+      {/* V2: Additional flags */}
+      {(risk.days_since_last_trade_flag || risk.free_float_flag || risk.ownership_concentration_flag) && (
+        <div className="space-y-2 mb-4 pt-2 border-t border-gray-100">
+          {risk.days_since_last_trade_flag && (
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-gray-700">Last Trade</span>
+              <span className="text-xs text-gray-600">{risk.days_since_last_trade_flag}</span>
+            </div>
+          )}
+          {risk.free_float_flag && (
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-gray-700">Free Float</span>
+              <span className="text-xs text-gray-600">{risk.free_float_flag}</span>
+            </div>
+          )}
+          {risk.ownership_concentration_flag && (
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-gray-700">Ownership</span>
+              <span className="text-xs text-gray-600">{risk.ownership_concentration_flag}</span>
+            </div>
+          )}
+        </div>
+      )}
+
       {risk.factors.length > 0 && (
         <div>
           <h4 className="text-xs font-semibold text-gray-500 uppercase mb-2">Risk Factors</h4>

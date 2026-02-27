@@ -142,11 +142,15 @@ async def scrape_symbol(ticker: str) -> dict[str, Any]:
     # -- Ratios ---------------------------------------------------------
     ratios = _extract_ratios(soup)
 
+    # -- Disclosures (SEINET news embedded on MSE page) -------------------
+    disclosures = _extract_disclosures(soup)
+
     return {
         "company": company,
         "price": price,
         "financials": financials,
         "ratios": ratios,
+        "disclosures": disclosures,
     }
 
 
@@ -411,3 +415,103 @@ def _extract_ratios(soup: BeautifulSoup) -> dict[str, Any]:
             ratios["market_cap"] = _parse_mkd_number(mc)
 
     return ratios
+
+
+def _extract_disclosures(soup: BeautifulSoup) -> dict[str, Any]:
+    """Extract SEINET news and financial report dates from the symbol page.
+
+    The MSE symbol page embeds a SEI-Net News section and a Financial Reports
+    section.  We parse those to surface recent disclosures.
+    """
+    disclosures: dict[str, Any] = {
+        "last_seinet_date": None,
+        "last_seinet_title": None,
+        "last_report_date": None,
+        "next_report_expected": None,
+        "recent_news": [],
+        "last_dividend_date": None,
+        "last_dividend_amount": None,
+    }
+
+    # --- SEI-Net News section ---
+    # Look for the news tab pane or a heading containing "SEI-Net" / "News".
+    news_section = soup.find(id="spiNews") or soup.find(id="news")
+    if not news_section:
+        # Fallback: search by heading text.
+        for heading in soup.find_all(["h3", "h4", "h5", "strong"]):
+            if heading.get_text(strip=True) and "sei" in heading.get_text(strip=True).lower():
+                news_section = heading.find_parent("div")
+                break
+
+    if news_section:
+        # Parse table rows or list items inside the news section.
+        rows = news_section.find_all("tr")
+        if not rows:
+            rows = news_section.find_all("li")
+
+        for row in rows[:10]:  # limit to 10 most recent
+            cells = row.find_all(["td", "span", "a"])
+            if not cells:
+                continue
+            date_str = None
+            title_str = None
+            url_str = None
+            for cell in cells:
+                text = _text(cell)
+                if not text:
+                    continue
+                # Check if it looks like a date (e.g. "2/25/2026" or "25.02.2026").
+                if re.search(r"\d{1,2}[/.\-]\d{1,2}[/.\-]\d{2,4}", text) and not date_str:
+                    date_str = text
+                elif not title_str:
+                    title_str = text
+                # Check for link.
+                a_tag = cell if cell.name == "a" else cell.find("a")
+                if a_tag and a_tag.get("href") and not url_str:
+                    href = a_tag["href"]
+                    if href.startswith("/"):
+                        href = f"https://www.mse.mk{href}"
+                    url_str = href
+                    if not title_str:
+                        title_str = _text(a_tag)
+
+            if title_str or date_str:
+                disclosures["recent_news"].append(
+                    {"date": date_str, "title": title_str, "url": url_str}
+                )
+
+        # First item is the latest.
+        if disclosures["recent_news"]:
+            disclosures["last_seinet_date"] = disclosures["recent_news"][0].get("date")
+            disclosures["last_seinet_title"] = disclosures["recent_news"][0].get("title")
+
+    # --- Financial Reports section ---
+    reports_section = soup.find(id="financialReports") or soup.find(id="reports")
+    if not reports_section:
+        for heading in soup.find_all(["h3", "h4", "h5", "strong"]):
+            if heading.get_text(strip=True) and "financial report" in heading.get_text(strip=True).lower():
+                reports_section = heading.find_parent("div")
+                break
+
+    if reports_section:
+        # Look for the most recent date in the reports section.
+        for cell in reports_section.find_all(["td", "span"]):
+            text = _text(cell)
+            if text and re.search(r"\d{1,2}[/.\-]\d{1,2}[/.\-]\d{2,4}", text):
+                disclosures["last_report_date"] = text
+                break
+
+    # --- Dividend info from the news ---
+    for item in disclosures["recent_news"]:
+        title = (item.get("title") or "").lower()
+        if "dividend" in title:
+            disclosures["last_dividend_date"] = item.get("date")
+            # Try to extract amount from title.
+            amount_match = re.search(r"(\d[\d,.]*)\s*(mkd|den)", title)
+            if amount_match:
+                disclosures["last_dividend_amount"] = _parse_mkd_number(
+                    amount_match.group(1)
+                )
+            break
+
+    return disclosures

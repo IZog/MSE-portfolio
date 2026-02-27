@@ -6,7 +6,10 @@ import statistics
 from typing import Any
 
 
-def compute_technical(price_history: list[dict[str, Any]]) -> dict[str, Any]:
+def compute_technical(
+    price_history: list[dict[str, Any]],
+    mbi10_history: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
     """Run technical analysis on historical price data.
 
     *price_history* should be sorted oldest-first with keys matching
@@ -26,6 +29,9 @@ def compute_technical(price_history: list[dict[str, Any]]) -> dict[str, Any]:
         "avg_volume_10d": None,
         "avg_volume_30d": None,
         "week52_position": None,
+        "ytd_return_pct": None,
+        "days_since_last_trade": None,
+        "beta_vs_mbi10": None,
         "score": 50.0,
     }
 
@@ -121,6 +127,16 @@ def compute_technical(price_history: list[dict[str, Any]]) -> dict[str, Any]:
         if span > 0:
             result["week52_position"] = round((current - low_52) / span, 3)
 
+    # ---- YTD return ----------------------------------------------------
+    result["ytd_return_pct"] = _compute_ytd_return(price_history)
+
+    # ---- Days since last trade ----------------------------------------
+    result["days_since_last_trade"] = _compute_days_since_last_trade(price_history)
+
+    # ---- Beta vs MBI10 ------------------------------------------------
+    if mbi10_history:
+        result["beta_vs_mbi10"] = _compute_beta(price_history, mbi10_history)
+
     # ---- Technical score (0-100) --------------------------------------
     result["score"] = _compute_score(result)
 
@@ -137,6 +153,104 @@ def _sma(prices: list[float], window: int) -> float | None:
         return None
     segment = prices[-window:]
     return sum(segment) / len(segment)
+
+
+def _compute_ytd_return(price_history: list[dict[str, Any]]) -> float | None:
+    """Compute year-to-date return percentage."""
+    if not price_history:
+        return None
+
+    from datetime import date as _date
+
+    current_year = _date.today().year
+    # Find the first trading day of the current year.
+    ytd_start_price = None
+    for p in price_history:
+        d = p.get("date", "")
+        if d.startswith(str(current_year)):
+            price = p.get("last_trade_price")
+            if price is not None:
+                ytd_start_price = price
+                break
+
+    if ytd_start_price is None or ytd_start_price == 0:
+        return None
+
+    # Latest price.
+    latest_price = None
+    for p in reversed(price_history):
+        if p.get("last_trade_price") is not None:
+            latest_price = p["last_trade_price"]
+            break
+
+    if latest_price is None:
+        return None
+
+    return round((latest_price - ytd_start_price) / ytd_start_price * 100, 2)
+
+
+def _compute_days_since_last_trade(price_history: list[dict[str, Any]]) -> int | None:
+    """Compute the number of calendar days since the most recent trade."""
+    if not price_history:
+        return None
+
+    from datetime import date as _date, datetime as _datetime
+
+    # Walk backwards to find the latest entry with volume > 0.
+    for p in reversed(price_history):
+        vol = p.get("volume")
+        if vol is not None and vol > 0:
+            date_str = p.get("date", "")
+            try:
+                # Try common formats.
+                for fmt in ("%m/%d/%Y", "%Y-%m-%d", "%d.%m.%Y"):
+                    try:
+                        trade_date = _datetime.strptime(date_str, fmt).date()
+                        return (_date.today() - trade_date).days
+                    except ValueError:
+                        continue
+            except Exception:
+                pass
+            return None
+    return None
+
+
+def _compute_beta(
+    price_history: list[dict[str, Any]],
+    mbi10_history: list[dict[str, Any]],
+) -> float | None:
+    """Compute beta of the stock vs. MBI10 index using daily returns."""
+    # Build date-indexed return maps.
+    def _returns_by_date(data: list[dict[str, Any]], price_key: str) -> dict[str, float]:
+        prices = [(p["date"], p[price_key]) for p in data if p.get(price_key) is not None]
+        result: dict[str, float] = {}
+        for i in range(1, len(prices)):
+            if prices[i - 1][1] and prices[i - 1][1] > 0:
+                ret = (prices[i][1] - prices[i - 1][1]) / prices[i - 1][1]
+                result[prices[i][0]] = ret
+        return result
+
+    stock_returns = _returns_by_date(price_history, "last_trade_price")
+    index_returns = _returns_by_date(mbi10_history, "value")
+
+    # Align by date.
+    common_dates = sorted(set(stock_returns) & set(index_returns))
+    if len(common_dates) < 20:
+        return None
+
+    sr = [stock_returns[d] for d in common_dates]
+    ir = [index_returns[d] for d in common_dates]
+
+    mean_s = sum(sr) / len(sr)
+    mean_i = sum(ir) / len(ir)
+
+    cov = sum((s - mean_s) * (i - mean_i) for s, i in zip(sr, ir)) / len(sr)
+    var_i = sum((i - mean_i) ** 2 for i in ir) / len(ir)
+
+    if var_i == 0:
+        return None
+
+    return round(cov / var_i, 2)
 
 
 def _compute_score(tech: dict[str, Any]) -> float:

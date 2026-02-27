@@ -65,6 +65,26 @@ class FinancialRatios(BaseModel):
     market_cap: float | None = Field(None, description="Market capitalisation (MKD)")
 
 
+class NewsItem(BaseModel):
+    """A single SEINET news/disclosure entry."""
+
+    date: str | None = None
+    title: str | None = None
+    url: str | None = None
+
+
+class DisclosureInfo(BaseModel):
+    """SEINET disclosures and financial report dates."""
+
+    last_seinet_date: str | None = None
+    last_seinet_title: str | None = None
+    last_report_date: str | None = None
+    next_report_expected: str | None = None
+    recent_news: list[NewsItem] = Field(default_factory=list)
+    last_dividend_date: str | None = None
+    last_dividend_amount: float | None = None
+
+
 class ValuationMetrics(BaseModel):
     """Output of the valuation analysis module."""
 
@@ -76,6 +96,10 @@ class ValuationMetrics(BaseModel):
     dividend_assessment: str | None = None
     earnings_yield: float | None = None
     overall_assessment: str | None = None
+    ev_ebitda: float | None = None
+    ev_ebitda_note: str | None = None
+    deposit_rate_spread: float | None = None
+    net_profit_margin: float | None = None
     score: float = Field(0, description="0-100 valuation score")
 
 
@@ -93,6 +117,9 @@ class TechnicalAnalysis(BaseModel):
     avg_volume_10d: float | None = None
     avg_volume_30d: float | None = None
     week52_position: float | None = None
+    ytd_return_pct: float | None = None
+    days_since_last_trade: int | None = None
+    beta_vs_mbi10: float | None = None
     score: float = Field(0, description="0-100 technical score")
 
 
@@ -104,6 +131,8 @@ class MacroContext(BaseModel):
     gdp_growth: float | None = None
     inflation: float | None = None
     policy_rate: float | None = None
+    deposit_rate: float | None = None
+    mbi10_ytd_pct: float | None = None
     last_updated: str | None = None
 
 
@@ -115,6 +144,9 @@ class RiskAssessment(BaseModel):
     financial_risk: str | None = None
     market_risk: str = "Medium"
     overall_risk: str | None = None
+    days_since_last_trade_flag: str | None = None
+    free_float_flag: str | None = None
+    ownership_concentration_flag: str | None = None
     factors: list[str] = Field(default_factory=list)
     score: float = Field(0, description="0-100 risk score (higher = safer)")
 
@@ -147,6 +179,7 @@ class ResearchReport(BaseModel):
     macro: MacroContext
     risk: RiskAssessment
     verdict: Verdict
+    disclosures: DisclosureInfo | None = None
     generated_at: str
 
 
