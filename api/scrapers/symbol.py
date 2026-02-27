@@ -190,28 +190,39 @@ def _extract_price_data(soup: BeautifulSoup) -> dict[str, Any]:
     """Extract current price, 52-week range, shares outstanding, market cap."""
     price: dict[str, Any] = {}
 
-    # Current / last price - look in various known locations.
-    for label in ("Last trade price", "Price", "Last Price", "Closing Price"):
+    # Current price — MSE uses <span class="price"> inside the symbol header.
+    price_el = soup.find("span", class_="price")
+    if price_el:
+        price["current_price"] = _parse_mkd_number(_text(price_el))
+
+    # Fallback: look for label-based price.
+    if not price.get("current_price"):
+        for label in ("Last trade price", "Price", "Last Price", "Closing Price"):
+            val = _find_label_value(soup, label)
+            if val:
+                price["current_price"] = _parse_mkd_number(val)
+                break
+
+    # Price change % — MSE uses <span class="change-percent">.
+    chg_el = soup.find("span", class_="change-percent")
+    if chg_el:
+        price["price_change_pct"] = _parse_mkd_number(_text(chg_el))
+    else:
+        chg = _find_label_value(soup, "%chg") or _find_label_value(soup, "Change")
+        price["price_change_pct"] = _parse_mkd_number(chg)
+
+    # 52-week high / low — MSE labels these as "Max Price" and "Min Price"
+    # inside the "Last 52 weeks" section.
+    for label in ("Max Price", "52 week high", "52-week high"):
         val = _find_label_value(soup, label)
         if val:
-            price["current_price"] = _parse_mkd_number(val)
+            price["high_52w"] = _parse_mkd_number(val)
             break
-
-    # Fallback: look for an element with id or class containing "price".
-    if not price.get("current_price"):
-        price_el = soup.find(id=re.compile(r"price", re.I))
-        if price_el:
-            price["current_price"] = _parse_mkd_number(_text(price_el))
-
-    # Price change %
-    chg = _find_label_value(soup, "%chg")
-    if chg is None:
-        chg = _find_label_value(soup, "Change")
-    price["price_change_pct"] = _parse_mkd_number(chg)
-
-    # 52-week high / low
-    price["high_52w"] = _parse_mkd_number(_find_label_value(soup, "52 week high"))
-    price["low_52w"] = _parse_mkd_number(_find_label_value(soup, "52 week low"))
+    for label in ("Min Price", "52 week low", "52-week low"):
+        val = _find_label_value(soup, label)
+        if val:
+            price["low_52w"] = _parse_mkd_number(val)
+            break
 
     # Total shares outstanding
     for label in ("Total shares", "Shares outstanding", "Number of shares"):
