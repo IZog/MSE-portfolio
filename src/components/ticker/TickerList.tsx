@@ -17,6 +17,7 @@ const POPULAR_TICKERS = [
   { symbol: 'CKB', name: 'Centralna kooperativna banka AD Skopje' },
   { symbol: 'UNI', name: 'UNI Banka AD Skopje' },
   // Industry & other
+  { symbol: 'PKB', name: 'PKB AD Skopje' },
   { symbol: 'OKTA', name: 'OKTA AD Skopje' },
   { symbol: 'VITA', name: 'Vitaminka AD Prilep' },
   { symbol: 'MTUR', name: 'Makedonijaturist AD Skopje' },
