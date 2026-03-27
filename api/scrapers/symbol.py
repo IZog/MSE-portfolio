@@ -34,8 +34,8 @@ _HEADERS = {
 def _parse_mkd_number(text: str | None) -> float | None:
     """Parse an MKD-formatted number string into a Python float.
 
-    MSE uses the format ``25,273.06`` (commas as thousands separators,
-    period for the decimal point).  Percentage signs are stripped.
+    Handles both US format ``25,273.06`` and European format ``25.273,06``.
+    Percentage signs are stripped.
     Returns ``None`` for empty / unparseable values.
     """
     if not text:
@@ -43,8 +43,21 @@ def _parse_mkd_number(text: str | None) -> float | None:
     cleaned = text.strip().replace("%", "").replace("\xa0", "").replace(" ", "")
     if not cleaned or cleaned == "-" or cleaned.lower() == "n/a":
         return None
-    # Remove thousands-separator commas.
-    cleaned = cleaned.replace(",", "")
+
+    if "," in cleaned and "." in cleaned:
+        if cleaned.rindex(".") < cleaned.rindex(","):
+            # European: dots are thousands, comma is decimal
+            cleaned = cleaned.replace(".", "").replace(",", ".")
+        else:
+            # US: commas are thousands, dot is decimal
+            cleaned = cleaned.replace(",", "")
+    elif "," in cleaned:
+        parts = cleaned.split(",")
+        if len(parts) == 2 and len(parts[1]) != 3:
+            cleaned = cleaned.replace(",", ".")
+        else:
+            cleaned = cleaned.replace(",", "")
+
     try:
         return float(cleaned)
     except ValueError:

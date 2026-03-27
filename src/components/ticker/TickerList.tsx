@@ -21,7 +21,6 @@ const POPULAR_TICKERS = [
   { symbol: 'OKTA', name: 'OKTA AD Skopje' },
   { symbol: 'VITA', name: 'Vitaminka AD Prilep' },
   { symbol: 'MTUR', name: 'Makedonijaturist AD Skopje' },
-  { symbol: 'MAKP', name: 'Makpromet AD Stip' },
 ];
 
 function verdictBorderColor(rating: string | null): string {

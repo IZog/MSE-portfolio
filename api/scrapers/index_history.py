@@ -26,12 +26,25 @@ _HEADERS = {
 
 
 def _parse_number(text: str | None) -> float | None:
+    """Parse a number that may use European or US formatting."""
     if not text:
         return None
     cleaned = text.strip().replace("%", "").replace("\xa0", "").replace(" ", "")
     if not cleaned or cleaned == "-" or cleaned.lower() in ("", "n/a"):
         return None
-    cleaned = cleaned.replace(",", "")
+
+    if "," in cleaned and "." in cleaned:
+        if cleaned.rindex(".") < cleaned.rindex(","):
+            cleaned = cleaned.replace(".", "").replace(",", ".")
+        else:
+            cleaned = cleaned.replace(",", "")
+    elif "," in cleaned:
+        parts = cleaned.split(",")
+        if len(parts) == 2 and len(parts[1]) != 3:
+            cleaned = cleaned.replace(",", ".")
+        else:
+            cleaned = cleaned.replace(",", "")
+
     try:
         return float(cleaned)
     except ValueError:
@@ -40,6 +53,18 @@ def _parse_number(text: str | None) -> float | None:
 
 def _format_date(d: date) -> str:
     return f"{d.month}/{d.day}/{d.year}"
+
+
+def _normalise_date(date_str: str) -> str:
+    """Convert any date string to ``YYYY-MM-DD``."""
+    from datetime import datetime as _dt
+
+    for fmt in ("%m/%d/%Y", "%Y-%m-%d", "%d.%m.%Y"):
+        try:
+            return _dt.strptime(date_str.strip(), fmt).strftime("%Y-%m-%d")
+        except ValueError:
+            continue
+    return date_str
 
 
 async def scrape_index_history(days: int = 365) -> list[dict[str, Any]]:
@@ -65,6 +90,8 @@ async def scrape_index_history(days: int = 365) -> list[dict[str, Any]]:
             seen.add(p["date"])
             unique.append(p)
 
+    for p in unique:
+        p["date"] = _normalise_date(p["date"])
     unique.sort(key=lambda p: p["date"])
     return unique
 
