@@ -53,16 +53,17 @@ def _parse_number(text: str | None) -> float | None:
 async def scrape_mbi10() -> dict[str, Any]:
     """Return MBI10 index value and daily change percentage.
 
-    Tries the MSE homepage first, then falls back to the MBI10 symbol page.
+    Tries the MBI10 symbol page first (more reliable), then falls back
+    to the MSE homepage.
     """
     async with httpx.AsyncClient(timeout=_TIMEOUT, headers=_HEADERS, follow_redirects=True) as client:
-        # Try homepage first - it typically shows index values.
-        result = await _try_homepage(client)
+        # Prefer the symbol page — structured data is more reliable.
+        result = await _try_symbol_page(client)
         if result.get("mbi10_value") is not None:
             return result
 
-        # Fallback: MBI10 symbol page.
-        result = await _try_symbol_page(client)
+        # Fallback: homepage widget.
+        result = await _try_homepage(client)
         return result
 
 
@@ -83,11 +84,18 @@ async def _try_homepage(client: httpx.AsyncClient) -> dict[str, Any]:
     if mbi_el:
         parent = mbi_el.find_parent(["div", "tr", "td", "section"])
         if parent:
-            numbers = re.findall(r"-?[\d,]+\.?\d*", parent.get_text())
-            if numbers:
-                result["mbi10_value"] = _parse_number(numbers[0])
-            if len(numbers) > 1:
-                result["mbi10_change_pct"] = _parse_number(numbers[1])
+            # Match numbers including European format (e.g. "7.834,56").
+            numbers = re.findall(r"-?[\d]+(?:[.,]\d+)*", parent.get_text())
+            # Filter out year-like values (2000-2099).
+            candidates = []
+            for n in numbers:
+                val = _parse_number(n)
+                if val is not None and not (2000 <= val <= 2099):
+                    candidates.append(val)
+            if candidates:
+                result["mbi10_value"] = candidates[0]
+            if len(candidates) > 1:
+                result["mbi10_change_pct"] = candidates[1]
 
     return result
 
