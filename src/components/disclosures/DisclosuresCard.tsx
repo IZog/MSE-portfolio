@@ -1,11 +1,12 @@
-import type { DisclosureInfo } from '../../types';
+import type { DisclosureInfo, DividendRecord } from '../../types';
 import Card from '../common/Card';
 
 interface Props {
   disclosures: DisclosureInfo | null;
+  dividendHistory?: DividendRecord[];
 }
 
-export default function DisclosuresCard({ disclosures }: Props) {
+export default function DisclosuresCard({ disclosures, dividendHistory }: Props) {
   if (!disclosures) {
     return (
       <Card title="Disclosures & News">
@@ -43,6 +44,35 @@ export default function DisclosuresCard({ disclosures }: Props) {
             </div>
           )}
         </dl>
+
+        {/* Dividend history table */}
+        {dividendHistory && dividendHistory.length > 0 && (
+          <div>
+            <h4 className="text-xs font-semibold text-gray-500 uppercase mb-2">Dividend History</h4>
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-200">
+                  <th className="text-left py-1 text-gray-500 font-medium">Year</th>
+                  <th className="text-right py-1 text-gray-500 font-medium">DPS (MKD)</th>
+                  <th className="text-right py-1 text-gray-500 font-medium">Yield</th>
+                </tr>
+              </thead>
+              <tbody>
+                {dividendHistory.map((d) => (
+                  <tr key={d.year} className="border-b border-gray-50">
+                    <td className="py-1 text-gray-700">{d.year}</td>
+                    <td className="py-1 text-right text-gray-900 font-medium">
+                      {d.dps != null ? d.dps.toLocaleString(undefined, { maximumFractionDigits: 2 }) : '—'}
+                    </td>
+                    <td className="py-1 text-right text-gray-600">
+                      {d.yield_pct != null ? `${d.yield_pct.toFixed(2)}%` : '—'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
 
         {/* Recent news */}
         {disclosures.recent_news.length > 0 && (

@@ -52,16 +52,23 @@ def compute_valuation(
     net_profit_margin: float | None = None
 
     # EV/EBITDA — estimate EBITDA as operating_profit × 1.15 (rough DA proxy).
-    if financials and current_price and total_shares:
+    if financials:
         latest = max(financials, key=lambda f: f.get("year", 0))
         op_profit = latest.get("operating_profit")
         total_liab = latest.get("total_liabilities", 0) or 0
-        if op_profit and op_profit > 0:
+
+        # Determine market cap: prefer scraped value, else compute from price × shares.
+        mkt_cap = market_cap
+        if not mkt_cap and current_price and total_shares and total_shares > 0:
+            mkt_cap = current_price * total_shares
+
+        if op_profit and op_profit > 0 and mkt_cap and mkt_cap > 0:
             ebitda_est = op_profit * 1.15
-            equity_value = current_price * total_shares
-            ev = equity_value + total_liab  # simplified: EV = market cap + debt
+            ev = mkt_cap + total_liab  # simplified: EV = market cap + debt
             ev_ebitda = round(ev / ebitda_est, 2)
             ev_ebitda_note = "EBITDA estimated as Operating Profit × 1.15"
+        elif op_profit is not None and op_profit <= 0:
+            ev_ebitda_note = "N/A — negative operating profit"
 
         # Net profit margin.
         revenue = latest.get("revenue")

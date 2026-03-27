@@ -31,6 +31,12 @@ function setCache(ticker: string, data: ResearchReport) {
   }
 }
 
+/** Read the cached verdict rating for a ticker without fetching. */
+export function getCachedVerdict(ticker: string): string | null {
+  const report = getCached(ticker);
+  return report?.verdict?.rating ?? null;
+}
+
 export function useResearch() {
   const [report, setReport] = useState<ResearchReport | null>(null);
   const [loading, setLoading] = useState(false);

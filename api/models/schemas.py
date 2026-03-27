@@ -73,6 +73,14 @@ class NewsItem(BaseModel):
     url: str | None = None
 
 
+class DividendRecord(BaseModel):
+    """Single year of dividend data from the ratios table."""
+
+    year: int
+    dps: float | None = Field(None, description="Dividend per share (MKD)")
+    yield_pct: float | None = Field(None, description="Dividend yield (%)")
+
+
 class DisclosureInfo(BaseModel):
     """SEINET disclosures and financial report dates."""
 
@@ -180,6 +188,7 @@ class ResearchReport(BaseModel):
     risk: RiskAssessment
     verdict: Verdict
     disclosures: DisclosureInfo | None = None
+    dividend_history: list[DividendRecord] = Field(default_factory=list)
     generated_at: str
 
 

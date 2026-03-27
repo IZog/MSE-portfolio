@@ -54,6 +54,12 @@ export interface NewsItem {
   url: string | null;
 }
 
+export interface DividendRecord {
+  year: number;
+  dps: number | null;
+  yield_pct: number | null;
+}
+
 export interface DisclosureInfo {
   last_seinet_date: string | null;
   last_seinet_title: string | null;
@@ -147,6 +153,7 @@ export interface ResearchReport {
   risk: RiskAssessment;
   verdict: Verdict;
   disclosures: DisclosureInfo | null;
+  dividend_history: DividendRecord[];
   generated_at: string;
 }
 
