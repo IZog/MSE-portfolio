@@ -77,7 +77,7 @@ def compute_valuation(
             net_profit_margin = round(net_p / revenue * 100, 2)
 
     # Deposit rate spread: earnings yield minus deposit rate.
-    deposit_rate = 3.5  # NBRM avg deposit rate
+    deposit_rate = 3.0  # Estimated avg deposit rate (Mar 2026)
     if earnings_yield is not None:
         deposit_rate_spread = round(earnings_yield - deposit_rate, 2)
 

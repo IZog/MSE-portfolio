@@ -21,7 +21,7 @@ function trendColor(trend: string | null): string {
 }
 
 export default function TechnicalCard({ technical }: Props) {
-  const position = technical.week52_position != null ? technical.week52_position : 50;
+  const position = technical.week52_position != null ? technical.week52_position : 50;  // 0-100 scale
 
   return (
     <Card title="Technical Analysis">

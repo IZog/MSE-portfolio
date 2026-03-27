@@ -35,24 +35,29 @@ def compute_technical(
         "score": 50.0,
     }
 
-    # Extract closing prices (last_trade_price) and volumes, ignoring None.
-    prices = [
+    # Only use days with actual trades (volume > 0) so SMAs, momentum, and
+    # volatility reflect real trading activity — not flat carry-forward prices.
+    traded = [
+        p for p in price_history
+        if p.get("last_trade_price") is not None
+        and p.get("volume") is not None
+        and p["volume"] > 0
+    ]
+    # All closing prices (including non-trading days) for 52-week range.
+    all_prices = [
         p["last_trade_price"]
         for p in price_history
         if p.get("last_trade_price") is not None
     ]
-    volumes = [
-        p["volume"]
-        for p in price_history
-        if p.get("volume") is not None and p["volume"] > 0
-    ]
+    prices = [p["last_trade_price"] for p in traded]
+    volumes = [p["volume"] for p in traded]
 
     if len(prices) < 5:
         return result
 
     # ---- Trend (SMA crossover) ----------------------------------------
-    short_window = min(50, len(prices) // 2) or 1
-    long_window = min(200, len(prices)) or short_window
+    short_window = min(20, len(prices) // 2) or 1
+    long_window = min(50, len(prices)) or short_window
 
     sma_short = _sma(prices, short_window)
     sma_long = _sma(prices, long_window)
@@ -68,18 +73,16 @@ def compute_technical(
         else:
             result["trend"] = "Neutral"
 
-    # ---- Support / Resistance (last 30 trading days) ------------------
-    recent_30 = prices[-30:] if len(prices) >= 30 else prices
+    # ---- Support / Resistance (last 30 actual trading days) -----------
+    recent_traded_30 = traded[-30:] if len(traded) >= 30 else traded
     highs = [
-        p["max_price"]
-        for p in price_history[-30:]
+        p["max_price"] for p in recent_traded_30
         if p.get("max_price") is not None
-    ] or recent_30
+    ] or prices[-30:]
     lows = [
-        p["min_price"]
-        for p in price_history[-30:]
+        p["min_price"] for p in recent_traded_30
         if p.get("min_price") is not None
-    ] or recent_30
+    ] or prices[-30:]
 
     result["support"] = round(min(lows), 2) if lows else None
     result["resistance"] = round(max(highs), 2) if highs else None
@@ -118,14 +121,15 @@ def compute_technical(
             else:
                 result["volume_trend"] = "Stable"
 
-    # ---- 52-week position ---------------------------------------------
-    if len(prices) >= 20:
-        high_52 = max(prices)
-        low_52 = min(prices)
-        current = prices[-1]
+    # ---- 52-week position (uses ALL prices including carry-forward) ----
+    ref_prices = all_prices if len(all_prices) >= 20 else prices
+    if len(ref_prices) >= 20:
+        high_52 = max(ref_prices)
+        low_52 = min(ref_prices)
+        current = ref_prices[-1]
         span = high_52 - low_52
         if span > 0:
-            result["week52_position"] = round((current - low_52) / span, 3)
+            result["week52_position"] = round((current - low_52) / span * 100, 1)
 
     # ---- YTD return ----------------------------------------------------
     result["ytd_return_pct"] = _compute_ytd_return(price_history)
@@ -203,7 +207,7 @@ def _compute_days_since_last_trade(price_history: list[dict[str, Any]]) -> int |
             date_str = p.get("date", "")
             try:
                 # Try common formats.
-                for fmt in ("%m/%d/%Y", "%Y-%m-%d", "%d.%m.%Y"):
+                for fmt in ("%Y-%m-%d", "%m/%d/%Y", "%d.%m.%Y"):
                     try:
                         trade_date = _datetime.strptime(date_str, fmt).date()
                         return (_date.today() - trade_date).days
@@ -280,9 +284,9 @@ def _compute_score(tech: dict[str, Any]) -> float:
     elif vol == "Decreasing":
         score -= 5
 
-    # 52-week position (mid-range is neutral, near high is good, near low is bad).
+    # 52-week position (0-100 scale; mid-range is neutral).
     pos = tech.get("week52_position")
     if pos is not None:
-        score += (pos - 0.5) * 20  # +/- 10
+        score += (pos - 50) / 50 * 10  # +/- 10
 
     return max(0, min(100, round(score, 1)))

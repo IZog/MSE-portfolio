@@ -19,12 +19,12 @@ def get_macro_context(
         "mbi10_value": mbi10_data.get("mbi10_value"),
         "mbi10_change_pct": mbi10_data.get("mbi10_change_pct"),
         # Static macroeconomic data for North Macedonia (update periodically).
-        "gdp_growth": 3.2,
-        "inflation": 3.2,
-        "policy_rate": 5.35,
-        "deposit_rate": 3.5,
+        "gdp_growth": 3.5,       # 2025 full-year GDP growth
+        "inflation": 2.9,        # Feb 2026 annual CPI
+        "policy_rate": 4.0,      # NBRM key rate (Mar 2026)
+        "deposit_rate": 3.0,     # Estimated avg deposit rate
         "mbi10_ytd_pct": mbi10_ytd_pct,
-        "last_updated": "2026-02",
+        "last_updated": "2026-03",
     }
 
 
