@@ -44,7 +44,7 @@ def compute_technical(
     volumes = [
         p["volume"]
         for p in price_history
-        if p.get("volume") is not None
+        if p.get("volume") is not None and p["volume"] > 0
     ]
 
     if len(prices) < 5:

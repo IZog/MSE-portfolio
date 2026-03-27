@@ -14,6 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from api.models.schemas import (
     CompanyProfile,
     DisclosureInfo,
+    DividendRecord,
     FinancialData,
     FinancialRatios,
     MacroContext,
@@ -166,6 +167,7 @@ async def get_research(
     financials_raw = symbol_data.get("financials", [])
     ratios_raw = symbol_data.get("ratios", {})
     disclosures_raw = symbol_data.get("disclosures", {})
+    dividend_history_raw = symbol_data.get("dividend_history", [])
 
     # ---- Step 3: Analysis pipeline -----------------------------------
     current_price = price_raw.get("current_price")
@@ -227,6 +229,7 @@ async def get_research(
         risk=RiskAssessment(**risk_data),
         verdict=Verdict(**verdict_data),
         disclosures=disclosure_model,
+        dividend_history=[DividendRecord(**d) for d in dividend_history_raw],
         generated_at=_now_iso(),
     )
 

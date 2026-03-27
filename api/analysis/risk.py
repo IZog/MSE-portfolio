@@ -22,7 +22,7 @@ def assess_risk(
     volumes = [
         p["volume"]
         for p in price_history
-        if p.get("volume") is not None
+        if p.get("volume") is not None and p["volume"] > 0
     ]
     avg_daily_volume = statistics.mean(volumes) if volumes else 0
 
@@ -55,19 +55,28 @@ def assess_risk(
         if prices[i - 1] > 0:
             daily_returns.append((prices[i] - prices[i - 1]) / prices[i - 1] * 100)
 
-    if len(daily_returns) >= 5:
+    if len(daily_returns) >= 20:
         vol_std = statistics.stdev(daily_returns)
-        if vol_std > 3:
+        annual_vol = vol_std * (252 ** 0.5)
+        # Thresholds tuned for MSE (frontier market, lower liquidity).
+        if vol_std > 5:
             volatility_risk = "High"
-            factors.append(f"High price volatility: {vol_std:.1f}% daily std dev")
-        elif vol_std > 1.5:
+            factors.append(
+                f"High price volatility: {vol_std:.1f}% daily / {annual_vol:.0f}% annualised"
+            )
+        elif vol_std > 2.5:
             volatility_risk = "Medium"
-            factors.append(f"Moderate price volatility: {vol_std:.1f}% daily std dev")
+            factors.append(
+                f"Moderate price volatility: {vol_std:.1f}% daily / {annual_vol:.0f}% annualised"
+            )
         else:
             volatility_risk = "Low"
     else:
         volatility_risk = "Medium"
-        factors.append("Insufficient price history to assess volatility accurately")
+        factors.append(
+            f"Insufficient price data ({len(daily_returns)} returns, need 20+) "
+            "to assess volatility accurately"
+        )
 
     # ---- Financial risk (debt / equity) -------------------------------
     financial_risk = "Medium"
@@ -111,6 +120,7 @@ def assess_risk(
     days_since_last_trade_flag = None
     from datetime import date as _date, datetime as _datetime
 
+    found_trade = False
     for p in reversed(price_history):
         vol = p.get("volume")
         if vol is not None and vol > 0:
@@ -126,10 +136,15 @@ def assess_risk(
                         days_since_last_trade_flag = f"Caution — last trade {days_gap} days ago"
                     else:
                         days_since_last_trade_flag = "Active"
+                    found_trade = True
                     break
                 except ValueError:
                     continue
             break
+
+    if not found_trade:
+        days_since_last_trade_flag = "Stale — no trades in observation period"
+        factors.append("No trades found in the entire observation period")
 
     # Free float and ownership — not available from MSE scraping.
     free_float_flag = "Unknown — not disclosed on MSE"

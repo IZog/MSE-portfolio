@@ -11,7 +11,6 @@ import CompanyProfile from '../components/profile/CompanyProfile';
 import CoreMetricsCard from '../components/core/CoreMetricsCard';
 import PriceCard from '../components/price/PriceCard';
 import PriceChart from '../components/price/PriceChart';
-import VolumeChart from '../components/price/VolumeChart';
 import FinancialsTable from '../components/financials/FinancialsTable';
 import RatiosTable from '../components/financials/RatiosTable';
 import ValuationCard from '../components/analysis/ValuationCard';
@@ -65,7 +64,7 @@ export default function DashboardPage() {
           <CompanyProfile company={report.company} />
           <RatiosTable ratios={report.ratios} />
           <MacroCard macro={report.macro} technical={report.technical} />
-          <DisclosuresCard disclosures={report.disclosures} />
+          <DisclosuresCard disclosures={report.disclosures} dividendHistory={report.dividend_history} />
         </div>
 
         {/* Middle column - spans 2 cols on large screens */}
@@ -75,7 +74,6 @@ export default function DashboardPage() {
             <ValuationCard valuation={report.valuation} />
           </div>
           <PriceChart history={report.price_history} technical={report.technical} />
-          <VolumeChart history={report.price_history} />
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             <FundamentalsCard
               financials={report.financials}

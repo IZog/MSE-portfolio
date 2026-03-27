@@ -145,12 +145,16 @@ async def scrape_symbol(ticker: str) -> dict[str, Any]:
     # -- Disclosures (SEINET news embedded on MSE page) -------------------
     disclosures = _extract_disclosures(soup)
 
+    # -- Dividend history (per-year DPS & yield from ratios table) -------
+    dividend_history = _extract_dividend_history(soup)
+
     return {
         "company": company,
         "price": price,
         "financials": financials,
         "ratios": ratios,
         "disclosures": disclosures,
+        "dividend_history": dividend_history,
     }
 
 
@@ -314,16 +318,19 @@ def _extract_financials(soup: BeautifulSoup) -> list[dict[str, Any]]:
                 if pattern.search(label):
                     for col_idx, year in year_indices.items():
                         if col_idx < len(row):
-                            year_data[year][field] = _parse_mkd_number(row[col_idx])
+                            raw = _parse_mkd_number(row[col_idx])
+                            # MSE reports financials in thousands of MKD;
+                            # convert to actual MKD so downstream math is correct.
+                            year_data[year][field] = raw * 1000 if raw is not None else None
                     break
 
         for year in sorted(year_data):
             data = year_data[year]
             if any(v is not None for v in data.values()):
-                # Skip rows that look like percentages (values < 100 when
-                # we expect figures in thousands of MKD).
+                # Skip rows that look like percentages (values < 100k MKD
+                # after the ×1000 conversion from thousands).
                 revenue = data.get("revenue")
-                if revenue is not None and abs(revenue) < 100:
+                if revenue is not None and abs(revenue) < 100_000:
                     continue
                 financials.append({"year": year, **data})
 
@@ -415,6 +422,62 @@ def _extract_ratios(soup: BeautifulSoup) -> dict[str, Any]:
             ratios["market_cap"] = _parse_mkd_number(mc)
 
     return ratios
+
+
+def _extract_dividend_history(soup: BeautifulSoup) -> list[dict[str, Any]]:
+    """Extract per-year dividend data from the ratios table.
+
+    Returns a list of ``{"year": int, "dps": float|None, "yield_pct": float|None}``
+    sorted by year descending.
+    """
+    dps_pattern = re.compile(r"dividend.?per.?share|dps", re.I)
+    yield_pattern = re.compile(r"dividend.?yield", re.I)
+
+    for table in soup.find_all("table"):
+        rows = _extract_table_rows(table)
+        if len(rows) < 2:
+            continue
+
+        header = rows[0]
+        year_cols: list[tuple[int, int]] = []
+        for idx, cell in enumerate(header):
+            m = re.search(r"(20\d{2})", cell)
+            if m:
+                year_cols.append((idx, int(m.group(1))))
+        if not year_cols:
+            continue
+
+        # Quick check: is this the ratios table?
+        flat_text = " ".join(r[0] for r in rows[1:] if r).lower()
+        if not any(kw in flat_text for kw in ["eps", "p/e", "dividend", "earnings per"]):
+            continue
+
+        year_dps: dict[int, float | None] = {}
+        year_yield: dict[int, float | None] = {}
+
+        for row in rows[1:]:
+            if not row:
+                continue
+            label = row[0]
+            if dps_pattern.search(label):
+                for col_idx, year in year_cols:
+                    if col_idx < len(row):
+                        year_dps[year] = _parse_mkd_number(row[col_idx])
+            elif yield_pattern.search(label):
+                for col_idx, year in year_cols:
+                    if col_idx < len(row):
+                        year_yield[year] = _parse_mkd_number(row[col_idx])
+
+        all_years = sorted(set(year_dps) | set(year_yield), reverse=True)
+        result: list[dict[str, Any]] = []
+        for yr in all_years:
+            dps = year_dps.get(yr)
+            yld = year_yield.get(yr)
+            if dps is not None or yld is not None:
+                result.append({"year": yr, "dps": dps, "yield_pct": yld})
+        return result
+
+    return []
 
 
 def _extract_disclosures(soup: BeautifulSoup) -> dict[str, Any]:
