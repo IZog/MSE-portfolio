@@ -30,16 +30,34 @@ _HEADERS = {
 # ---------------------------------------------------------------------------
 
 def _parse_number(text: str | None) -> float | None:
-    """Parse a number that may use European or US formatting."""
+    """Parse a number that may use European or US formatting.
+
+    European: ``109.500,00``  (dots = thousands, comma = decimal)
+    US:       ``109,500.00``  (commas = thousands, dot = decimal)
+    """
     if not text:
         return None
     cleaned = text.strip().replace("%", "").replace("\xa0", "").replace(" ", "")
     if not cleaned or cleaned == "-" or cleaned.lower() in ("", "n/a"):
         return None
 
-    # MSE English pages typically use "25,273.06" (US-style).
-    # But some entries may have no decimal at all.
-    cleaned = cleaned.replace(",", "")
+    if "," in cleaned and "." in cleaned:
+        if cleaned.rindex(".") < cleaned.rindex(","):
+            # European: dots are thousands, comma is decimal
+            cleaned = cleaned.replace(".", "").replace(",", ".")
+        else:
+            # US: commas are thousands, dot is decimal
+            cleaned = cleaned.replace(",", "")
+    elif "," in cleaned:
+        # Comma only — European decimal ("109,50") or US thousands ("1,000").
+        parts = cleaned.split(",")
+        if len(parts) == 2 and len(parts[1]) != 3:
+            # Not a group-of-3 → treat comma as decimal separator.
+            cleaned = cleaned.replace(",", ".")
+        else:
+            cleaned = cleaned.replace(",", "")
+    # else: plain number or dot-decimal — no change needed.
+
     try:
         return float(cleaned)
     except ValueError:
@@ -55,6 +73,18 @@ def _parse_int(text: str | None) -> int | None:
 def _format_date(d: date) -> str:
     """Format a date as ``M/D/YYYY`` which is what the MSE query parameter expects."""
     return f"{d.month}/{d.day}/{d.year}"
+
+
+def _normalise_date(date_str: str) -> str:
+    """Convert any date string to ``YYYY-MM-DD`` for consistent sorting and frontend use."""
+    from datetime import datetime as _dt
+
+    for fmt in ("%m/%d/%Y", "%Y-%m-%d", "%d.%m.%Y"):
+        try:
+            return _dt.strptime(date_str.strip(), fmt).strftime("%Y-%m-%d")
+        except ValueError:
+            continue
+    return date_str  # fallback: return as-is
 
 
 # ---------------------------------------------------------------------------
@@ -93,7 +123,9 @@ async def scrape_history(
             seen.add(p["date"])
             unique.append(p)
 
-    # Sort oldest-first.
+    # Normalise dates to YYYY-MM-DD and sort chronologically.
+    for p in unique:
+        p["date"] = _normalise_date(p["date"])
     unique.sort(key=lambda p: p["date"])
     return unique
 
