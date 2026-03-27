@@ -277,10 +277,9 @@ def _extract_price_data(soup: BeautifulSoup) -> dict[str, Any]:
             price["total_shares"] = _parse_mkd_int(val)
             break
 
-    # Market capitalisation
-    price["market_cap"] = _parse_mkd_number(
-        _find_label_value(soup, "Market capitali")
-    )
+    # Market capitalisation — MSE reports in thousands of MKD.
+    raw_mc = _parse_mkd_number(_find_label_value(soup, "Market capitali"))
+    price["market_cap"] = raw_mc * 1000 if raw_mc is not None else None
 
     return price
 
@@ -429,10 +428,12 @@ def _extract_ratios(soup: BeautifulSoup) -> dict[str, Any]:
         break  # Only process the first matching table.
 
     # Market cap is not in the ratios table — it's a label/value pair.
+    # MSE reports in thousands of MKD.
     if "market_cap" not in ratios:
         mc = _find_label_value(soup, "Market capitali")
         if mc:
-            ratios["market_cap"] = _parse_mkd_number(mc)
+            raw_mc = _parse_mkd_number(mc)
+            ratios["market_cap"] = raw_mc * 1000 if raw_mc is not None else None
 
     return ratios
 

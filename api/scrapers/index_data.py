@@ -28,9 +28,22 @@ _HEADERS = {
 def _parse_number(text: str | None) -> float | None:
     if not text:
         return None
-    cleaned = text.strip().replace("%", "").replace("\xa0", "").replace(" ", "").replace(",", "")
+    cleaned = text.strip().replace("%", "").replace("\xa0", "").replace(" ", "")
     if not cleaned or cleaned == "-" or cleaned.lower() == "n/a":
         return None
+
+    if "," in cleaned and "." in cleaned:
+        if cleaned.rindex(".") < cleaned.rindex(","):
+            cleaned = cleaned.replace(".", "").replace(",", ".")
+        else:
+            cleaned = cleaned.replace(",", "")
+    elif "," in cleaned:
+        parts = cleaned.split(",")
+        if len(parts) == 2 and len(parts[1]) != 3:
+            cleaned = cleaned.replace(",", ".")
+        else:
+            cleaned = cleaned.replace(",", "")
+
     try:
         return float(cleaned)
     except ValueError:

@@ -45,10 +45,14 @@ def assess_risk(
         liquidity_risk = "Low"
 
     # ---- Volatility risk (std dev of daily returns) -------------------
+    # Only use days with actual trades so carry-forward flat prices don't
+    # compress the standard deviation and make volatility appear artificially low.
     prices = [
         p["last_trade_price"]
         for p in price_history
         if p.get("last_trade_price") is not None
+        and p.get("volume") is not None
+        and p["volume"] > 0
     ]
     daily_returns: list[float] = []
     for i in range(1, len(prices)):
@@ -125,7 +129,7 @@ def assess_risk(
         vol = p.get("volume")
         if vol is not None and vol > 0:
             date_str = p.get("date", "")
-            for fmt in ("%m/%d/%Y", "%Y-%m-%d", "%d.%m.%Y"):
+            for fmt in ("%Y-%m-%d", "%m/%d/%Y", "%d.%m.%Y"):
                 try:
                     trade_date = _datetime.strptime(date_str, fmt).date()
                     days_gap = (_date.today() - trade_date).days
